@@ -270,7 +270,7 @@ class _OfflineWorkDetailScreenState
   // 构建网络封面图片（使用缓存）
   Widget _buildNetworkCover(Work work, String host, String token) {
     return CachedNetworkImage(
-      imageUrl: '$host/api/cover/${work.id}',
+      imageUrl: work.getCoverImageUrl(host, token: token),
       httpHeaders: {'Authorization': 'Bearer $token'},
       fit: BoxFit.contain,
       placeholder: (context, url) => Container(
@@ -368,7 +368,7 @@ class _OfflineWorkDetailScreenState
     // 封面图片组件
     final coverUrl = widget.localCoverPath != null
         ? 'file://${widget.localCoverPath}'
-        : '$host/api/cover/${work.id}';
+        : work.getCoverImageUrl(host, token: token);
     final hasLocalCover = widget.localCoverPath != null &&
         File(widget.localCoverPath!).existsSync();
     final displaySettings = ref.watch(workDetailDisplayProvider);

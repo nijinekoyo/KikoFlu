@@ -11,6 +11,7 @@ import '../providers/audio_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/lyric_provider.dart';
 import '../utils/local_file_url.dart';
+import '../utils/server_utils.dart';
 import '../utils/system_ui_style.dart';
 import '../widgets/player/player_cover_widget.dart';
 import '../widgets/player/player_controls_widget.dart';
@@ -158,9 +159,7 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen> {
       normalizedHost = 'https://$normalizedHost';
     }
 
-    return token.isNotEmpty
-        ? '$normalizedHost/api/cover/$workId?token=$token'
-        : '$normalizedHost/api/cover/$workId';
+    return ServerUtils.coverUrl(normalizedHost, workId, token);
   }
 
   void _handleSeekChanged(double value) {

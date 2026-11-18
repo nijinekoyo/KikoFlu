@@ -21,6 +21,7 @@ import 'download_path_service.dart';
 import 'storage_service.dart';
 import '../utils/image_blur_util.dart';
 import '../utils/local_file_url.dart';
+import '../utils/server_utils.dart';
 
 final _log = LogService.instance;
 
@@ -46,13 +47,16 @@ class AudioPlayerService {
   AudioPlayerService.forTesting(
     AudioPlayer player, {
     List<AudioTrack> queue = const [],
+    Map<String, String> Function(String)? headersForUrl,
   }) {
+    _headersForUrl = headersForUrl ?? (_) => const {};
     _player = player;
     _queue.addAll(queue);
     _setupPlayerListeners();
   }
 
   late final AudioPlayer _player;
+  Map<String, String> Function(String) _headersForUrl = StorageService.headersForUrl;
   AndroidLoudnessEnhancer? _androidLoudnessEnhancer;
   final AudioHapticsService _hapticsService = AudioHapticsService.instance;
   final List<AudioTrack> _queue = [];
@@ -522,7 +526,10 @@ class AudioPlayerService {
 
       if (!loaded) {
         final streamUrl = fallbackStreamUrl ?? track.url;
-        await _player.setUrl(streamUrl);
+        await _player.setUrl(
+          streamUrl,
+          headers: _headersForUrl(streamUrl),
+        );
         unawaited(_hapticsService.prepareForTrack(track));
         _log.captureOutput('[Audio] 流式播放: $streamUrl');
       }
@@ -598,6 +605,22 @@ class AudioPlayerService {
       }
     }
 
+    if (displayArtworkUrl != null &&
+        track.workId != null &&
+        StorageService.headersForUrl(displayArtworkUrl)
+            .containsKey('Authorization')) {
+      final cachedCover = await CacheService.cacheFileResource(
+        workId: track.workId!,
+        hash: 'cover/${track.workId}',
+        fileType: 'cover.jpg',
+        url: displayArtworkUrl,
+        dio: Dio(),
+      );
+      if (cachedCover != null) {
+        displayArtworkUrl = LocalFileUrl.fromPath(cachedCover);
+      }
+    }
+
     (_audioHandler as _AudioPlayerHandler).mediaItem.add(
       MediaItem(
         id: track.id,
@@ -606,6 +629,9 @@ class AudioPlayerService {
         artist: track.artist ?? '',
         duration: track.duration,
         artUri: displayArtworkUrl != null ? Uri.parse(displayArtworkUrl) : null,
+        artHeaders: displayArtworkUrl != null
+            ? StorageService.headersForUrl(displayArtworkUrl)
+            : null,
       ),
     );
 
@@ -709,7 +735,7 @@ class AudioPlayerService {
 
       // 复用 CacheService 的下载 + finalize 流程，把整首流式音频写到本地缓存
       final dio = Dio();
-      dio.options.headers.addAll(StorageService.serverCookieHeaders);
+      dio.options.headers.addAll(StorageService.headersForUrl(url));
       dio.options.connectTimeout = const Duration(seconds: 15);
       dio.options.receiveTimeout = const Duration(seconds: 60);
 
@@ -1138,6 +1164,9 @@ class AudioPlayerService {
     if (value == null || value.isEmpty) return value;
     final token = StorageService.getString('auth_token');
     if (token == null || token.isEmpty) return value;
+    if (ServerUtils.isSessionCredential(token)) {
+      return ServerUtils.withAuthToken(value, token);
+    }
 
     final uri = Uri.tryParse(value);
     if (uri == null ||
@@ -1497,9 +1526,7 @@ class AudioPlayerService {
         : 'https://$host';
     final token = StorageService.getString('auth_token');
     final uri = Uri.parse('$normalizedHost/api/media/stream/$hash');
-    return token == null || token.isEmpty
-        ? uri.toString()
-        : uri.replace(queryParameters: {'token': token}).toString();
+    return ServerUtils.withAuthToken(uri.toString(), token ?? '');
   }
 
   Future<Directory> _getTempAudioDirectory() async {

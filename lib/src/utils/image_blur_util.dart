@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
 import 'local_file_url.dart';
+import '../services/storage_service.dart';
 
 /// 图片模糊处理工具类
 class ImageBlurUtil {
@@ -41,7 +42,10 @@ class ImageBlurUtil {
       } else {
         // 网络URL
         final response = await http
-            .get(Uri.parse(imageUrl))
+            .get(
+              Uri.parse(imageUrl),
+              headers: StorageService.headersForUrl(imageUrl),
+            )
             .timeout(const Duration(seconds: 30));
         if (response.statusCode != 200) {
           debugPrint('下载图片失败: ${response.statusCode}');

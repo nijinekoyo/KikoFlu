@@ -1079,7 +1079,9 @@ class _LocalDownloadsScreenState extends ConsumerState<LocalDownloadsScreen>
       }
     }
 
-    final httpHeaders = StorageService.serverCookieHeaders;
+    final httpHeaders = StorageService.headersForUrl(
+      work?.getCoverImageUrl(host, token: token) ?? '',
+    );
 
     // 降级使用网络封面
     if (work != null && host.isNotEmpty) {

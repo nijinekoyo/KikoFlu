@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -24,7 +25,20 @@ class CacheService {
       Duration(days: 30); // 音频文件缓存30天（基于hash，不受URL变化影响）
   // 注意：图片缓存由 cached_network_image 包自己管理过期时间（默认7天）
 
-  static String _safeAudioHash(String hash) => hash.replaceAll('/', '_');
+  // Path-based track IDs can contain hundreds of encoded filename bytes.
+  // Digest them to keep cache paths short and avoid separator collisions.
+  static String _safeAudioHash(String hash) {
+    if (!hash.contains('/')) return hash;
+    final host = StorageService.getString('server_host') ?? '';
+    return sha256.convert(utf8.encode('$host\n$hash')).toString();
+  }
+
+  static String _workCacheKey(String kind, int workId) {
+    final host = StorageService.getString('server_host') ?? '';
+    final user = StorageService.getMap('current_user')?['name'] ?? '';
+    final scope = sha256.convert(utf8.encode('$host\n$user'));
+    return '${kind}_${scope}_$workId';
+  }
 
   static Future<File> _audioFinalFile(String hash) async {
     final safeHash = _safeAudioHash(hash);
@@ -133,8 +147,8 @@ class CacheService {
   static Future<void> cacheWorkDetail(
       int workId, Map<String, dynamic> workData) async {
     final prefs = await StorageService.getPrefs();
-    final cacheKey = 'work_detail_$workId';
-    final cacheTimeKey = 'work_detail_time_$workId';
+    final cacheKey = _workCacheKey('work_detail', workId);
+    final cacheTimeKey = _workCacheKey('work_detail_time', workId);
 
     // 使用 JSON 编码保存完整数据
     await prefs.setString(cacheKey, jsonEncode(workData));
@@ -144,8 +158,8 @@ class CacheService {
   // 获取缓存的作品详情
   static Future<Map<String, dynamic>?> getCachedWorkDetail(int workId) async {
     final prefs = await StorageService.getPrefs();
-    final cacheKey = 'work_detail_$workId';
-    final cacheTimeKey = 'work_detail_time_$workId';
+    final cacheKey = _workCacheKey('work_detail', workId);
+    final cacheTimeKey = _workCacheKey('work_detail_time', workId);
 
     final cachedData = prefs.getString(cacheKey);
     final cacheTime = prefs.getInt(cacheTimeKey);
@@ -178,8 +192,8 @@ class CacheService {
   // 清除指定作品的详情缓存（用于收藏状态更新后强制刷新）
   static Future<void> invalidateWorkDetailCache(int workId) async {
     final prefs = await StorageService.getPrefs();
-    final cacheKey = 'work_detail_$workId';
-    final cacheTimeKey = 'work_detail_time_$workId';
+    final cacheKey = _workCacheKey('work_detail', workId);
+    final cacheTimeKey = _workCacheKey('work_detail_time', workId);
 
     await prefs.remove(cacheKey);
     await prefs.remove(cacheTimeKey);
@@ -189,8 +203,8 @@ class CacheService {
   // 缓存作品文件列表
   static Future<void> cacheWorkTracks(int workId, String tracksJson) async {
     final prefs = await StorageService.getPrefs();
-    final cacheKey = 'work_tracks_$workId';
-    final cacheTimeKey = 'work_tracks_time_$workId';
+    final cacheKey = _workCacheKey('work_tracks', workId);
+    final cacheTimeKey = _workCacheKey('work_tracks_time', workId);
 
     await prefs.setString(cacheKey, tracksJson);
     await prefs.setInt(cacheTimeKey, DateTime.now().millisecondsSinceEpoch);
@@ -199,8 +213,8 @@ class CacheService {
   // 获取缓存的作品文件列表
   static Future<String?> getCachedWorkTracks(int workId) async {
     final prefs = await StorageService.getPrefs();
-    final cacheKey = 'work_tracks_$workId';
-    final cacheTimeKey = 'work_tracks_time_$workId';
+    final cacheKey = _workCacheKey('work_tracks', workId);
+    final cacheTimeKey = _workCacheKey('work_tracks_time', workId);
 
     final cachedData = prefs.getString(cacheKey);
     final cacheTime = prefs.getInt(cacheTimeKey);
@@ -277,7 +291,7 @@ class CacheService {
       _log.captureOutput('[Cache] 下载音频文件: $hash');
 
       // 配置服务器Cookie（如果存在）
-      dio.options.headers.addAll(StorageService.serverCookieHeaders);
+      dio.options.headers.addAll(StorageService.headersForUrl(url));
       final response = await dio.download(
         url,
         tempFile.path,
@@ -418,7 +432,7 @@ class CacheService {
       // 2. 检查缓存文件
       final cacheDir = await _getCacheDirectory();
       // 使用 hash 作为文件名（替换路径分隔符为下划线）
-      final safeHash = hash.replaceAll('/', '_');
+      final safeHash = _safeAudioHash(hash);
       final fileName = '${workId}_${safeHash}_$fileType';
       final filePath = p.join(cacheDir.path, fileName);
 
@@ -435,7 +449,7 @@ class CacheService {
 
       // 下载文件
       // 配置服务器Cookie（如果存在）
-      dio.options.headers.addAll(StorageService.serverCookieHeaders);
+      dio.options.headers.addAll(StorageService.headersForUrl(url));
 
       await dio.download(url, filePath);
 
@@ -462,7 +476,7 @@ class CacheService {
   }) async {
     try {
       final cacheDir = await _getCacheDirectory();
-      final safeHash = hash.replaceAll('/', '_');
+      final safeHash = _safeAudioHash(hash);
       final fileName = '${workId}_${safeHash}_$fileType';
       final filePath = p.join(cacheDir.path, fileName);
 
@@ -500,7 +514,7 @@ class CacheService {
   }) async {
     try {
       final cacheDir = await _getCacheDirectory();
-      final safeHash = hash.replaceAll('/', '_');
+      final safeHash = _safeAudioHash(hash);
       final fileName = '${workId}_${safeHash}_text.txt';
       final filePath = p.join(cacheDir.path, fileName);
 
@@ -539,7 +553,7 @@ class CacheService {
 
       // 2. 检查缓存文件
       final cacheDir = await _getCacheDirectory();
-      final safeHash = hash.replaceAll('/', '_');
+      final safeHash = _safeAudioHash(hash);
       final cacheFileName = '${workId}_${safeHash}_text.txt';
       final filePath = p.join(cacheDir.path, cacheFileName);
 
@@ -953,8 +967,9 @@ class CacheService {
                 DateTime.fromMillisecondsSinceEpoch(cacheTime);
             if (now.difference(cacheDateTime) > workDetailCacheDuration) {
               // 过期，删除缓存数据和时间戳
-              final workId = key.replaceFirst('work_detail_time_', '');
-              await prefs.remove('work_detail_$workId');
+              await prefs.remove(
+                key.replaceFirst('work_detail_time_', 'work_detail_'),
+              );
               await prefs.remove(key);
               deletedCount += 2;
             }
@@ -968,8 +983,9 @@ class CacheService {
                 DateTime.fromMillisecondsSinceEpoch(cacheTime);
             if (now.difference(cacheDateTime) > workTracksCacheDuration) {
               // 过期，删除缓存数据和时间戳
-              final workId = key.replaceFirst('work_tracks_time_', '');
-              await prefs.remove('work_tracks_$workId');
+              await prefs.remove(
+                key.replaceFirst('work_tracks_time_', 'work_tracks_'),
+              );
               await prefs.remove(key);
               deletedCount += 2;
             }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'download_file_path_service.dart';
 import '../utils/file_tree_utils.dart';
 import '../utils/local_file_url.dart';
+import '../utils/server_utils.dart';
 
 typedef AudioDownloadedPathResolver = Future<String?> Function(
   int workId,
@@ -133,7 +134,10 @@ class AudioFileUrlResolver {
         host.startsWith('http://') || host.startsWith('https://')
             ? host
             : 'https://$host';
-    return '$normalizedHost/api/media/stream/$fileHash?token=$token';
+    return ServerUtils.withAuthToken(
+      '$normalizedHost/api/media/stream/$fileHash',
+      token,
+    );
   }
 
   Future<String?> resolveOffline({
@@ -241,14 +245,11 @@ class AudioFileUrlResolver {
   static String _absoluteMediaUrl(String url, String host) {
     if (!url.startsWith('/')) return url;
     if (host.isEmpty) return url;
-    return '${normalizeMediaHost(host)}$url';
+    return ServerUtils.resolveMediaUrl(host, url);
   }
 
   static String _withToken(String url, String token) {
-    if (token.isEmpty || url.contains('token=')) {
-      return url;
-    }
-    return url.contains('?') ? '$url&token=$token' : '$url?token=$token';
+    return ServerUtils.withAuthToken(url, token);
   }
 
   static String normalizeMediaHost(String host) {

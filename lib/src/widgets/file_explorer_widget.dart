@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +27,8 @@ import '../utils/file_icon_utils.dart';
 import '../utils/file_tree_utils.dart';
 import '../utils/snackbar_util.dart';
 import '../utils/string_utils.dart';
+import '../utils/server_utils.dart';
+import '../utils/local_file_url.dart';
 import 'file_tree_actions.dart';
 import 'file_tree_view.dart';
 import 'file_explorer_tree_panel.dart';
@@ -550,12 +553,32 @@ class _FileExplorerWidgetState extends ConsumerState<FileExplorerWidget> {
     switch (targetResult.status) {
       case PreviewVideoTargetStatus.ready:
         final target = targetResult.requireTarget;
+        var source = target.source;
+        // External players cannot attach a Bearer session header. Open an
+        // authenticated cached copy when the backend requires session auth.
+        if (!target.isLocalFile && ServerUtils.isSessionCredential(token)) {
+          final title = FileTreeUtils.titleOf(videoFile);
+          final extension = title.split('.').last.toLowerCase();
+          final cachedPath = await CacheService.cacheFileResource(
+            workId: widget.work.id,
+            hash: FileTreeUtils.property(videoFile, 'hash').toString(),
+            fileType: 'video.$extension',
+            url: source,
+            dio: Dio(),
+          );
+          if (!mounted) return;
+          if (cachedPath == null) {
+            SnackBarUtil.showError(context, S.of(context).downloadFailed);
+            return;
+          }
+          source = LocalFileUrl.fromPath(cachedPath);
+        }
         final localPath = target.localPath;
         if (localPath != null) {
           _log.captureOutput('[FileExplorer] 使用本地视频文件: $localPath');
         }
 
-        final result = await _videoFileOpener.open(target.source);
+        final result = await _videoFileOpener.open(source);
         if (!mounted) return;
 
         _handleVideoOpenResult(result);

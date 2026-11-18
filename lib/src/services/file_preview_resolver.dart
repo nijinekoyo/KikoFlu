@@ -3,6 +3,7 @@ import 'dart:io';
 import 'download_file_path_service.dart';
 import '../utils/file_tree_utils.dart';
 import '../utils/local_file_url.dart';
+import '../utils/server_utils.dart';
 
 typedef PreviewDownloadRootProvider = Future<String> Function();
 typedef PreviewFileExists = Future<bool> Function(String path);
@@ -219,7 +220,10 @@ class FilePreviewResolver {
     required String hash,
     required String token,
   }) {
-    return '${normalizeHost(host)}/api/media/stream/$hash?token=$token';
+    return ServerUtils.withAuthToken(
+      '${ServerUtils.normalizeHost(host)}/api/media/stream/$hash',
+      token,
+    );
   }
 
   Future<String?> resolveOnlineUrl({

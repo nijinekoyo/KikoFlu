@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 
 import '../services/cache_service.dart';
+import '../services/storage_service.dart';
 import '../utils/local_file_url.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -112,6 +113,7 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
         errorBuilder: (context, error, stackTrace) {
           return Image.network(
             widget.imageUrl,
+            headers: StorageService.headersForUrl(widget.imageUrl),
             fit: widget.fit,
             errorBuilder: (context, error, stackTrace) =>
                 _buildErrorWidget(error.toString()),
@@ -122,6 +124,7 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
 
     return Image.network(
       widget.imageUrl,
+      headers: StorageService.headersForUrl(widget.imageUrl),
       fit: widget.fit,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;

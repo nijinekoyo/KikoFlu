@@ -821,7 +821,7 @@ class _EnhancedWorkCardState extends ConsumerState<EnhancedWorkCard> {
       isListCard: _isListLayout,
     );
 
-    final httpHeaders = StorageService.serverCookieHeaders;
+    final httpHeaders = StorageService.headersForUrl(url);
 
     return Hero(
       tag: 'work_cover_${widget.work.id}',

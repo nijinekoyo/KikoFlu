@@ -4,7 +4,7 @@ import '../../l10n/app_localizations.dart';
 import 'metadata_search_chip.dart';
 
 class CircleChip extends StatelessWidget {
-  final int circleId;
+  final Object circleId;
   final String circleName;
   final VoidCallback? onDeleted;
   final VoidCallback? onTap;

@@ -60,7 +60,8 @@ ImageProvider<Object> createWorkCoverImageProvider({
 }) {
   final provider = CachedNetworkImageProvider(
     work.getCoverImageUrl(host, token: token),
-    headers: headers ?? StorageService.serverCookieHeaders,
+    headers: headers ??
+        StorageService.headersForUrl(work.getCoverImageUrl(host, token: token)),
     cacheKey: 'work_cover_${work.id}',
   );
   return ResizeImage.resizeIfNeeded(cacheWidth, null, provider);

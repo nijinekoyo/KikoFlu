@@ -7,9 +7,9 @@ part of 'work.dart';
 // **************************************************************************
 
 Work _$WorkFromJson(Map<String, dynamic> json) => Work(
-      id: (json['id'] as num).toInt(),
+      id: KikoenaiWorkId.fromJson(json['id']),
       title: json['title'] as String,
-      circleId: (json['circle_id'] as num?)?.toInt(),
+      circleId: json['circle_id'],
       name: json['name'] as String?,
       vas: (json['vas'] as List<dynamic>?)
           ?.map((e) => Va.fromJson(e as Map<String, dynamic>))
@@ -97,7 +97,7 @@ Map<String, dynamic> _$OtherLanguageEditionToJson(
 RatingDetail _$RatingDetailFromJson(Map<String, dynamic> json) => RatingDetail(
       reviewPoint: (json['review_point'] as num).toInt(),
       count: (json['count'] as num).toInt(),
-      ratio: (json['ratio'] as num).toInt(),
+      ratio: (json['ratio'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$RatingDetailToJson(RatingDetail instance) =>
@@ -107,10 +107,8 @@ Map<String, dynamic> _$RatingDetailToJson(RatingDetail instance) =>
       'ratio': instance.ratio,
     };
 
-Circle _$CircleFromJson(Map<String, dynamic> json) => Circle(
-      id: (json['id'] as num).toInt(),
-      title: json['name'] as String,
-    );
+Circle _$CircleFromJson(Map<String, dynamic> json) =>
+    Circle(id: json['id'] as Object, title: json['name'] as String);
 
 Map<String, dynamic> _$CircleToJson(Circle instance) => <String, dynamic>{
       'id': instance.id,
@@ -128,7 +126,7 @@ Map<String, dynamic> _$VaToJson(Va instance) => <String, dynamic>{
     };
 
 Tag _$TagFromJson(Map<String, dynamic> json) => Tag(
-      id: (json['id'] as num).toInt(),
+      id: json['id'] as Object,
       name: json['name'] as String,
       upvote: (json['upvote'] as num?)?.toInt(),
       downvote: (json['downvote'] as num?)?.toInt(),

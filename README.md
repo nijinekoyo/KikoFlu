@@ -5,7 +5,7 @@
 
   [English](README_EN.md) | [日本語](README_JA.md) | 简体中文
   
-  一个跨平台同人音声客户端，支持连接 Kikoeru 自建服务器或在线服务
+  一个跨平台同人音声客户端，支持连接 Kikoeru / Kikoenai 自建服务器或在线服务
 
   [![Flutter](https://img.shields.io/badge/Flutter-3.0+-02569B?logo=flutter)](https://flutter.dev)
   [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#)
@@ -64,6 +64,7 @@
 - 多形式、多语言翻译支持
 
 ### ⚙️ 设置
+- 支持 [Rivers47/Kikoenai](https://github.com/Rivers47/Kikoenai) 的会话登录、新搜索接口与文件列表（[连接说明](docs/kikoenai.md)）
 - 多账户支持
 - 自定义服务器地址（[使用指南](https://github.com/pa-jesusf/KikoFlu/wiki/%E4%BD%BF%E7%94%A8%E8%87%AA%E5%BB%BA%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%99%A8)），可测试连接延迟
 - 自定义缓存大小限制与清理策略
@@ -122,6 +123,7 @@ flutter pub get
 ## 相关项目
 
 - [Kikoeru](https://github.com/Number178/kikoeru-express) — 自建后端服务器
+- [Kikoenai](https://github.com/Rivers47/Kikoenai) — 改版自建后端服务器
 - [asmr.one](https://www.asmr.one) — 在线服务
 
 ## 开源协议

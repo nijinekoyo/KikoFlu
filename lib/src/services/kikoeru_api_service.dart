@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import '../models/work.dart';
 import '../utils/server_utils.dart';
+import '../utils/kikoenai_work_id.dart';
+import 'kikoenai_protocol.dart';
 import '../services/storage_service.dart';
 import 'cache_service.dart';
 import 'log_service.dart';
@@ -19,12 +21,19 @@ class KikoeruApiService {
   late Dio _dio;
   String? _token;
   String? _host;
+  int? _customPageSize;
+  int _shuffleSeed = DateTime.now().millisecondsSinceEpoch % 100000 + 1;
+
+  bool get isKikoenai =>
+      !_isOfficialServer && ServerUtils.isSessionCredential(_token);
+
+  String _workId(int id) => isKikoenai ? KikoenaiWorkId.serverId(id) : '$id';
   int _subtitle = 0; // 1: 带字幕, 0: 不限制 (默认显示所有作品)
   String _order = 'create_date';
   String _sort = 'desc'; // 默认降序排列
 
-  KikoeruApiService() {
-    _dio = Dio();
+  KikoeruApiService({Dio? dio}) {
+    _dio = dio ?? Dio();
     _setupInterceptors();
   }
 
@@ -94,8 +103,10 @@ class KikoeruApiService {
 
     _dio.interceptors.add(
       LogInterceptor(
-        requestBody: true,
-        responseBody: true,
+        requestBody: false,
+        responseBody: false,
+        requestHeader: false,
+        responseHeader: false,
         logPrint: (object) {
           // Custom logging if needed
           _logOutput(object);
@@ -106,19 +117,9 @@ class KikoeruApiService {
 
   void init(String token, String host) {
     _token = token;
-    // Handle host configuration properly
-    if (host.startsWith('http://') || host.startsWith('https://')) {
-      _host = host;
-    } else {
-      // For remote hosts, use HTTPS; for localhost, use HTTP
-      if (host.contains('localhost') ||
-          host.startsWith('127.0.0.1') ||
-          host.startsWith('192.168.')) {
-        _host = 'http://$host';
-      } else {
-        _host = 'https://$host';
-      }
-    }
+    final normalizedHost = ServerUtils.normalizeHost(host);
+    if (_host != normalizedHost) _customPageSize = null;
+    _host = normalizedHost;
     _dio.options.baseUrl = _host!;
 
     _logOutput(
@@ -152,7 +153,7 @@ class KikoeruApiService {
       testDio.options.connectTimeout = const Duration(seconds: 3);
       testDio.options.receiveTimeout = const Duration(seconds: 3);
 
-      final testHost = host.startsWith('http') ? host : 'https://$host';
+      final testHost = ServerUtils.normalizeHost(host);
 
       await testDio.get(
         '$testHost/api/health',
@@ -171,6 +172,49 @@ class KikoeruApiService {
   bool get isOfficialServer => ServerUtils.isOfficialServer(_host);
   bool get _isOfficialServer => isOfficialServer;
 
+  Future<Map<String, dynamic>> _getKikoenaiWorks({
+    required int page,
+    required int pageSize,
+    required String order,
+    String sort = 'desc',
+    String? filter,
+    int nsfw = 0,
+    int? seed,
+  }) {
+    final effectiveOrder = KikoenaiProtocol.order(order);
+    // /search also accepts the metadata columns used by the sales/price sorts.
+    final useSearch = filter != null ||
+        ![
+          'release',
+          'created_at',
+          'rating',
+          'random',
+          'betterRandom',
+        ].contains(effectiveOrder);
+    if (page == 1 && order == 'random' && seed == null) {
+      _shuffleSeed = DateTime.now().millisecondsSinceEpoch % 100000 + 1;
+    }
+    final shuffleSeed = seed ?? _shuffleSeed;
+    return _fetchCombinedPages(
+      page: page,
+      pageSize: pageSize,
+      fetcher: (serverPage) async {
+        final response = await _dio.get(
+          useSearch ? '/api/search' : '/api/works',
+          queryParameters: {
+            'page': serverPage,
+            'order': effectiveOrder,
+            'sort': sort,
+            'nsfw': nsfw,
+            'seed': shuffleSeed,
+            if (useSearch) 'filter': filter ?? '',
+          },
+        );
+        return Map<String, dynamic>.from(response.data as Map);
+      },
+    );
+  }
+
   // Helper to fetch combined pages for custom server
   Future<Map<String, dynamic>> _fetchCombinedPages({
     required int page,
@@ -179,21 +223,40 @@ class KikoeruApiService {
     String listKey = 'works',
     int serverPageSize = 12,
   }) async {
+    Map<String, dynamic>? firstPage;
+    if (!_isOfficialServer) {
+      if (_customPageSize == null) {
+        firstPage = await fetcher(1);
+        final reportedSize = firstPage['pagination']?['pageSize'];
+        _customPageSize = int.tryParse('$reportedSize') ?? serverPageSize;
+        if (_customPageSize! <= 0) _customPageSize = serverPageSize;
+      }
+      serverPageSize = _customPageSize!;
+    }
     // Calculate item range
     final startItemIndex = (page - 1) * pageSize;
     final endItemIndex = startItemIndex + pageSize;
 
     // Calculate server pages
     final startServerPage = (startItemIndex / serverPageSize).floor() + 1;
-    final endServerPage = ((endItemIndex - 1) / serverPageSize).floor() + 1;
+    var endServerPage = ((endItemIndex - 1) / serverPageSize).floor() + 1;
+    final reportedTotal = int.tryParse(
+      '${firstPage?['pagination']?['totalCount']}',
+    );
+    if (reportedTotal != null) {
+      final lastPage = (reportedTotal / serverPageSize).ceil();
+      if (endServerPage > lastPage) endServerPage = lastPage;
+    }
 
     List<dynamic> combinedList = [];
-    int totalCount = 0;
+    int totalCount = reportedTotal ?? 0;
 
     // Fetch pages
     final futures = <Future<Map<String, dynamic>>>[];
     for (int p = startServerPage; p <= endServerPage; p++) {
-      futures.add(fetcher(p));
+      futures.add(
+        p == 1 && firstPage != null ? Future.value(firstPage) : fetcher(p),
+      );
     }
 
     final results = await Future.wait(futures);
@@ -215,7 +278,7 @@ class KikoeruApiService {
       // Try to get total count from any valid response
       if (result['pagination'] != null &&
           result['pagination']['totalCount'] != null) {
-        totalCount = result['pagination']['totalCount'];
+        totalCount = int.tryParse('${result['pagination']['totalCount']}') ?? 0;
       }
     }
 
@@ -245,20 +308,7 @@ class KikoeruApiService {
   // Authentication APIs
   Future<Map<String, dynamic>> login(
       String username, String password, String host) async {
-    // Set up host first without token
-    if (host.startsWith('http://') || host.startsWith('https://')) {
-      _host = host;
-    } else {
-      // For remote hosts, use HTTPS; for localhost, use HTTP
-      if (host.contains('localhost') ||
-          host.startsWith('127.0.0.1') ||
-          host.startsWith('192.168.')) {
-        _host = 'http://$host';
-      } else {
-        _host = 'https://$host';
-      }
-    }
-    _dio.options.baseUrl = _host!;
+    init(_token ?? '', host);
 
     if (_isOfficialServer) {
       return _loginOfficial(username, password);
@@ -296,12 +346,15 @@ class KikoeruApiService {
         data: {'name': username, 'password': password},
       );
 
-      // If login successful, extract and store token
-      if (response.data is Map && response.data['token'] != null) {
-        _token = response.data['token'];
+      final data = Map<String, dynamic>.from(response.data as Map);
+      // Non-browser clients authenticate with Bearer <session> on Kikoenai.
+      final credential = data['session'] ?? data['token'];
+      if (credential is String) {
+        _token = credential;
+        data['token'] = credential;
       }
-
-      return response.data;
+      if (data['session'] != null) data['auth'] = true;
+      return data;
     } catch (e) {
       throw KikoeruApiException('Login failed', e);
     }
@@ -313,20 +366,7 @@ class KikoeruApiService {
     // This ensures we can restore it if registration fails
     final originalToken = _token;
 
-    // Set up host first without token
-    if (host.startsWith('http://') || host.startsWith('https://')) {
-      _host = host;
-    } else {
-      // For remote hosts, use HTTPS; for localhost, use HTTP
-      if (host.contains('localhost') ||
-          host.startsWith('127.0.0.1') ||
-          host.startsWith('192.168.')) {
-        _host = 'http://$host';
-      } else {
-        _host = 'https://$host';
-      }
-    }
-    _dio.options.baseUrl = _host!;
+    init(_token ?? '', host);
 
     if (_isOfficialServer) {
       return _registerOfficial(username, password, originalToken);
@@ -523,6 +563,16 @@ class KikoeruApiService {
     int? subtitle,
     int? seed,
   }) async {
+    if (isKikoenai) {
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: order ?? _order,
+        sort: sort ?? _sort,
+        seed: seed,
+        nsfw: (order ?? _order) == 'nsfw' ? 1 : 0,
+      );
+    }
     return _fetchCombinedPages(
       page: page,
       pageSize: pageSize,
@@ -622,6 +672,14 @@ class KikoeruApiService {
     int? subtitle,
     List<String>? withPlaylistStatus,
   }) async {
+    if (isKikoenai) {
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: 'dl_count',
+        filter: keyword,
+      );
+    }
     return _fetchCombinedPages(
       page: page,
       pageSize: pageSize,
@@ -715,6 +773,14 @@ class KikoeruApiService {
     int? subtitle,
     List<String>? withPlaylistStatus,
   }) async {
+    if (isKikoenai) {
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: 'random',
+        filter: keyword,
+      );
+    }
     return _fetchCombinedPages(
       page: page,
       pageSize: pageSize,
@@ -795,8 +861,33 @@ class KikoeruApiService {
       _logOutput(forceRefresh
           ? '[API] 强制刷新作品详情: $workId'
           : '[API] 作品详情缓存未命中，从网络获取: $workId');
-      final metadataResponse = await _dio.get('/api/work/$workId');
+      final metadataResponse = await _dio.get('/api/work/${_workId(workId)}');
       final data = metadataResponse.data as Map<String, dynamic>;
+
+      if (isKikoenai) {
+        try {
+          final extras = await _dio.get('/api/work/${_workId(workId)}/extras');
+          final extraData = extras.data as Map;
+          final description = extraData['description'] as String? ?? '';
+          final parts = extraData['descriptionParts'] as List? ?? [];
+          data['description'] = description.isNotEmpty ? description : parts
+              .whereType<Map>()
+              .map((part) => [part['heading'], part['text']]
+                  .whereType<String>().where((text) => text.isNotEmpty).join('\n'))
+              .where((text) => text.isNotEmpty).join('\n\n');
+          final images = extraData['sampleImages'] as List? ?? [];
+          data['images'] = images
+              .whereType<Map>()
+              .where((image) => image['file'] is String)
+              .map(
+                (image) =>
+                    '${_host!}/api/image/${_workId(workId)}/${Uri.encodeComponent(image['file'] as String)}',
+              )
+              .toList();
+        } on DioException catch (e) {
+          if (e.response?.statusCode != 404) rethrow;
+        }
+      }
 
       // 3. 保存到缓存
       await CacheService.cacheWorkDetail(workId, data);
@@ -808,7 +899,7 @@ class KikoeruApiService {
   }
 
   Future<Map<String, dynamic>> getWorksByTag({
-    required int tagId,
+    required Object tagId,
     int page = 1,
     int pageSize = 40,
     String? order,
@@ -816,6 +907,19 @@ class KikoeruApiService {
     int? subtitle,
     int? seed,
   }) async {
+    if (isKikoenai) {
+      final label = await _dio.get(
+        '/api/tags/${Uri.encodeComponent('$tagId')}',
+      );
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: order ?? _order,
+        sort: sort ?? _sort,
+        seed: seed,
+        filter: KikoenaiProtocol.search('\$tag:${label.data['name']}\$').filter,
+      );
+    }
     if (!_isOfficialServer) {
       return _fetchCombinedPages(
         page: page,
@@ -872,6 +976,17 @@ class KikoeruApiService {
     int? subtitle,
     int? seed,
   }) async {
+    if (isKikoenai) {
+      final label = await _dio.get('/api/vas/${Uri.encodeComponent(vaId)}');
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: order ?? _order,
+        sort: sort ?? _sort,
+        seed: seed,
+        filter: KikoenaiProtocol.search('\$va:${label.data['name']}\$').filter,
+      );
+    }
     if (!_isOfficialServer) {
       return _fetchCombinedPages(
         page: page,
@@ -996,6 +1111,18 @@ class KikoeruApiService {
     int? seed,
     bool includeTranslationWorks = true,
   }) async {
+    if (isKikoenai) {
+      final search = KikoenaiProtocol.search(keyword);
+      return _getKikoenaiWorks(
+        page: page,
+        pageSize: pageSize,
+        order: order ?? _order,
+        sort: sort ?? _sort,
+        seed: seed,
+        filter: search.filter,
+        nsfw: search.nsfw,
+      );
+    }
     try {
       // Handle local backend compatibility for sort order
       String effectiveOrder = order ?? _order;
@@ -1245,8 +1372,10 @@ class KikoeruApiService {
       if (forceRefresh) {
         _logOutput('[API] 强制刷新作品文件列表: $workId');
       }
-      final response = await _dio.get('/api/tracks/$workId');
-      final tracks = response.data as List<dynamic>;
+      final response = await _dio.get('/api/tracks/${_workId(workId)}');
+      final tracks = isKikoenai || response.data is Map
+          ? KikoenaiProtocol.tracks(response.data, _host!)
+          : response.data as List<dynamic>;
 
       // 3. 保存到缓存
       await CacheService.cacheWorkTracks(workId, jsonEncode(tracks));
@@ -1436,7 +1565,7 @@ class KikoeruApiService {
       }
 
       final response = await _dio.put(
-        '/api/review',
+        isKikoenai ? '/api/review/${_workId(workId)}' : '/api/review',
         data: data,
         queryParameters: queryParams,
       );
@@ -1474,7 +1603,7 @@ class KikoeruApiService {
   Future<void> _deleteReviewCustom(int workId) async {
     try {
       await _dio.delete(
-        '/api/review',
+        isKikoenai ? '/api/review/${_workId(workId)}' : '/api/review',
         queryParameters: {'work_id': workId},
       );
 
@@ -1489,7 +1618,7 @@ class KikoeruApiService {
   /// status: 0=取消投票, 1=支持, 2=反对
   Future<Map<String, dynamic>> voteWorkTag({
     required int workId,
-    required int tagId,
+    required Object tagId,
     required int status,
   }) async {
     try {
@@ -1551,6 +1680,9 @@ class KikoeruApiService {
   // Favorites API
   Future<Map<String, dynamic>> getFavorites(
       {int page = 1, int pageSize = 20}) async {
+    if (isKikoenai) {
+      return getMyReviews(page: page, pageSize: pageSize, filter: 'marked');
+    }
     if (!_isOfficialServer) {
       return _fetchCombinedPages(
         page: page,
@@ -1595,6 +1727,10 @@ class KikoeruApiService {
   }
 
   Future<void> addToFavorites(int workId) async {
+    if (isKikoenai) {
+      await updateReviewProgress(workId, progress: 'marked');
+      return;
+    }
     try {
       await _dio.put('/api/favourites/$workId');
     } catch (e) {
@@ -1604,6 +1740,11 @@ class KikoeruApiService {
 
   Future<void> removeFromFavorites(int workId) async {
     try {
+      if (isKikoenai) {
+        await _dio.delete('/api/review/${_workId(workId)}/progress');
+        await CacheService.invalidateWorkDetailCache(workId);
+        return;
+      }
       await _dio.delete('/api/favourites/$workId');
     } catch (e) {
       throw KikoeruApiException('Failed to remove from favorites', e);
@@ -1838,15 +1979,26 @@ class KikoeruApiService {
 
   // Download API
   String getDownloadUrl(String hash, String fileName) {
+    if (isKikoenai) return '$_host/api/media/download/$hash';
     return '$_host/api/media/download/$hash/$fileName';
   }
 
   String getStreamUrl(String hash, String fileName) {
+    if (isKikoenai) return '$_host/api/media/stream/$hash';
     return '$_host/api/media/stream/$hash/$fileName';
   }
 
   String getCoverUrl(int workId) {
-    return '$_host/api/cover/$workId';
+    return '$_host/api/cover/${_workId(workId)}';
+  }
+
+  Future<void> logout() async {
+    try {
+      if (isKikoenai) await _dio.post('/api/auth/logout');
+    } finally {
+      _token = null;
+      _customPageSize = null;
+    }
   }
 
   // Cleanup

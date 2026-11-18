@@ -14,6 +14,8 @@ import '../providers/player_lyric_style_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/audio_player_screen.dart';
 import '../utils/local_file_url.dart';
+import '../utils/server_utils.dart';
+import '../services/storage_service.dart';
 import 'privacy_blur_cover.dart';
 import 'volume_control.dart';
 import 'liquid_glass_layout.dart';
@@ -109,9 +111,11 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                 !normalizedHost.startsWith('https://')) {
               normalizedHost = 'https://$normalizedHost';
             }
-            workCoverUrl = token.isNotEmpty
-                ? '$normalizedHost/api/cover/${track.workId}?token=$token'
-                : '$normalizedHost/api/cover/${track.workId}';
+            workCoverUrl = ServerUtils.coverUrl(
+              normalizedHost,
+              track.workId!,
+              token,
+            );
           }
         }
 
@@ -561,6 +565,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                       )
                     : CachedNetworkImage(
                         imageUrl: (workCoverUrl ?? track.artworkUrl)!,
+                        httpHeaders: StorageService.headersForUrl(
+                          (workCoverUrl ?? track.artworkUrl)!,
+                        ),
                         cacheKey: track.workId != null
                             ? 'work_cover_${track.workId}'
                             : null,

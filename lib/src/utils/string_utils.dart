@@ -1,3 +1,5 @@
+import 'kikoenai_work_id.dart';
+
 String formatBytes(int bytes) {
   if (bytes < 1024) {
     return '$bytes B';
@@ -31,6 +33,7 @@ String formatDurationSeconds(dynamic secondsValue, {bool padHours = true}) {
 }
 
 String formatRJCode(int id) {
+  if (id < 0) return KikoenaiWorkId.displayId(id);
   String code = id.toString();
   if (code.length == 5) {
     code = '0$code';

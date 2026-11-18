@@ -113,7 +113,7 @@ class _CoverPreviewDialogState extends State<CoverPreviewDialog> {
           widget.imageUrl!,
           options: Options(
             responseType: ResponseType.bytes,
-            headers: StorageService.serverCookieHeaders,
+            headers: StorageService.headersForUrl(widget.imageUrl!),
           ),
         );
         imageBytes = Uint8List.fromList(response.data!);
@@ -202,6 +202,7 @@ class _CoverPreviewDialogState extends State<CoverPreviewDialog> {
           if (widget.imageUrl != null) {
             return CachedNetworkImage(
               imageUrl: widget.imageUrl!,
+              httpHeaders: StorageService.headersForUrl(widget.imageUrl!),
               fit: BoxFit.contain,
               placeholder: (context, url) => const Center(
                 child: CircularProgressIndicator(),
@@ -223,6 +224,7 @@ class _CoverPreviewDialogState extends State<CoverPreviewDialog> {
     } else if (widget.imageUrl != null) {
       imageWidget = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
+        httpHeaders: StorageService.headersForUrl(widget.imageUrl!),
         fit: BoxFit.contain,
         placeholder: (context, url) => const Center(
           child: CircularProgressIndicator(),

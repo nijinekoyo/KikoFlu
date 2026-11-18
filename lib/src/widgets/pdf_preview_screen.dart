@@ -104,7 +104,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         }
 
         final dio = Dio();
-        dio.options.headers.addAll(StorageService.serverCookieHeaders);
+        dio.options.headers.addAll(StorageService.headersForUrl(widget.pdfUrl));
 
         final newCachedPath = await CacheService.cacheFileResource(
           workId: widget.workId!,
@@ -137,7 +137,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         filePath,
         options: Options(
           receiveTimeout: const Duration(seconds: 60),
-          headers: StorageService.serverCookieHeaders,
+          headers: StorageService.headersForUrl(widget.pdfUrl),
         ),
         onReceiveProgress: (received, total) {
           if (total != -1) {

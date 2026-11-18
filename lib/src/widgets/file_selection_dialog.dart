@@ -6,6 +6,7 @@ import '../models/work.dart';
 import '../services/download_file_path_service.dart';
 import '../services/download_service.dart';
 import '../utils/string_utils.dart';
+import '../utils/server_utils.dart';
 import '../utils/file_icon_utils.dart';
 import '../utils/snackbar_util.dart';
 import '../providers/auth_provider.dart';
@@ -342,6 +343,7 @@ class _FileSelectionDialogState extends ConsumerState<FileSelectionDialog> {
               '$normalizedHost/api/media/download/${file.hash}/${Uri.encodeComponent(file.title)}?token=$token';
         }
 
+        downloadUrl = ServerUtils.withAuthToken(downloadUrl, token);
         await downloadService.addTask(
           workId: widget.work.id,
           workTitle: widget.work.title,

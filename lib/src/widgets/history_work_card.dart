@@ -44,7 +44,9 @@ class HistoryWorkCard extends ConsumerWidget {
     final work = record.work;
     final showAgeRating = ref.watch(workCardDisplayProvider).showAgeRating;
 
-    final httpHeaders = StorageService.serverCookieHeaders;
+    final httpHeaders = StorageService.headersForUrl(
+      work.getCoverImageUrl(host, token: token),
+    );
     final initialCoverImageProvider = host.isEmpty
         ? null
         : createWorkCoverImageProvider(
@@ -417,9 +419,7 @@ class HistoryWorkCard extends ConsumerWidget {
       if (!host.startsWith('http://') && !host.startsWith('https://')) {
         normalizedUrl = 'https://$host';
       }
-      coverUrl = token.isNotEmpty
-          ? '$normalizedUrl/api/cover/${work.id}?token=$token'
-          : '$normalizedUrl/api/cover/${work.id}';
+      coverUrl = work.getCoverImageUrl(normalizedUrl, token: token);
     }
 
     final audioUrlResolver = AudioFileUrlResolver(

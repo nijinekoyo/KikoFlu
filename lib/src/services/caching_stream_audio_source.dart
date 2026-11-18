@@ -31,10 +31,7 @@ class CachingStreamAudioSource extends StreamAudioSource {
     }
 
     // 如果配置了服务器cookie，则添加Cookie字段
-    final cookieHeaders = StorageService.serverCookieHeaders;
-    if (cookieHeaders.containsKey('Cookie')) {
-      request.headers.add(HttpHeaders.cookieHeader, cookieHeaders['Cookie']!);
-    }
+    StorageService.headersForUrl(uri.toString()).forEach(request.headers.set);
 
     final response = await request.close();
 

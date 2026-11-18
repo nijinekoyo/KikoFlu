@@ -590,7 +590,7 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
         options: Options(
           responseType: ResponseType.bytes, // 改为获取字节数据
           receiveTimeout: const Duration(seconds: 30),
-          headers: StorageService.serverCookieHeaders,
+          headers: StorageService.headersForUrl(widget.textUrl),
         ),
       );
 

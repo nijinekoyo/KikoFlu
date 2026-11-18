@@ -234,6 +234,15 @@ class SearchResultNotifier extends StateNotifier<SearchResultState> {
           sort: state.sortDirection.value,
           subtitle: serverSubtitleParam,
         );
+      } else if (_apiService.isKikoenai &&
+          state.searchParams?.containsKey('circleId') == true) {
+        result = await _apiService.searchWorks(
+          keyword: '\$circle:${state.searchParams!['circleName']}\$',
+          page: page,
+          pageSize: state.pageSize,
+          order: state.sortOption.value,
+          sort: state.sortDirection.value,
+        );
       } else {
         result = await _apiService.searchWorks(
           keyword: state.keyword,

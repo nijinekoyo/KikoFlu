@@ -17,6 +17,7 @@ import '../services/log_service.dart';
 import '../utils/encoding_utils.dart';
 import '../services/translation_service.dart';
 import '../services/storage_service.dart';
+import '../utils/server_utils.dart';
 import 'auth_provider.dart';
 import 'audio_provider.dart';
 import 'settings_provider.dart';
@@ -277,7 +278,10 @@ class LyricController extends StateNotifier<LyricState> {
       if (!host.startsWith('http://') && !host.startsWith('https://')) {
         normalizedUrl = 'https://$host';
       }
-      final lyricUrl = '$normalizedUrl/api/media/stream/$hash?token=$token';
+      final lyricUrl = ServerUtils.withAuthToken(
+        '$normalizedUrl/api/media/stream/$hash',
+        token,
+      );
 
       String? content;
 
@@ -301,7 +305,7 @@ class LyricController extends StateNotifier<LyricState> {
           options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30),
-            headers: StorageService.serverCookieHeaders,
+            headers: StorageService.headersForUrl(lyricUrl),
           ),
         );
         if (!_isCurrentLoadRequest(requestId)) return;
@@ -943,7 +947,10 @@ class LyricController extends StateNotifier<LyricState> {
           normalizedUrl = 'https://$host';
         }
       }
-      final lyricUrl = '$normalizedUrl/api/media/stream/$hash?token=$token';
+      final lyricUrl = ServerUtils.withAuthToken(
+        '$normalizedUrl/api/media/stream/$hash',
+        token,
+      );
 
       String content;
 
@@ -978,7 +985,7 @@ class LyricController extends StateNotifier<LyricState> {
           options: Options(
             responseType: ResponseType.bytes,
             receiveTimeout: const Duration(seconds: 30),
-            headers: StorageService.serverCookieHeaders,
+            headers: StorageService.headersForUrl(lyricUrl),
           ),
         );
         if (!_isCurrentLoadRequest(requestId)) return;

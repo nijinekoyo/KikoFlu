@@ -544,7 +544,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     final colorScheme = theme.colorScheme;
     final displaySettings = ref.watch(workCardDisplayProvider);
 
-    final httpHeaders = StorageService.serverCookieHeaders;
+    final httpHeaders = StorageService.headersForUrl(
+      work.getCoverImageUrl(host, token: token),
+    );
     final initialCoverImageProvider = host.isEmpty
         ? null
         : createWorkCoverImageProvider(

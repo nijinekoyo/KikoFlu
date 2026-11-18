@@ -1,16 +1,19 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:equatable/equatable.dart';
 import '../utils/string_utils.dart';
+import '../utils/kikoenai_work_id.dart';
+import '../utils/server_utils.dart';
 
 part 'work.g.dart';
 
 @JsonSerializable()
 class Work extends Equatable {
+  @JsonKey(fromJson: KikoenaiWorkId.fromJson)
   final int id;
   final String title;
 
   @JsonKey(name: 'circle_id')
-  final int? circleId;
+  final Object? circleId;
 
   final String? name; // circle名称
 
@@ -88,8 +91,25 @@ class Work extends Equatable {
   });
 
   factory Work.fromJson(Map<String, dynamic> json) {
-    Map<String, dynamic> processingJson = json;
-    bool isModified = false;
+    Map<String, dynamic> processingJson = Map<String, dynamic>.from(json);
+    final circle = json['circle'];
+    if (circle is Map) {
+      processingJson['circle_id'] ??= circle['id'];
+      processingJson['name'] ??= circle['name'];
+    }
+    if (processingJson['age'] == null &&
+        json['age_category_string'] == null &&
+        json['nsfw'] != null) {
+      processingJson['age'] =
+          json['nsfw'] == true || json['nsfw'] == 1 ? 'adult' : 'general';
+    }
+    if (json['id'] is String) {
+      final id = KikoenaiWorkId.fromJson(json['id']);
+      processingJson['source_id'] ??= KikoenaiWorkId.displayId(id);
+      processingJson['source_url'] ??= id < 0 && -id % 10 == 1
+          ? 'https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=d_${-id ~/ 10}/'
+          : 'https://www.dlsite.com/${id < 0 ? 'books' : 'maniax'}/work/=/product_id/${KikoenaiWorkId.displayId(id)}.html';
+    }
 
     // ASMR.one/Kikoeru returns the age rating as age_category_string.
     // Keep accepting age for custom servers that already use the app's field.
@@ -97,9 +117,7 @@ class Work extends Equatable {
             (processingJson['age'] is String &&
                 (processingJson['age'] as String).trim().isEmpty)) &&
         processingJson['age_category_string'] != null) {
-      processingJson = Map<String, dynamic>.from(json);
       processingJson['age'] = processingJson['age_category_string'];
-      isModified = true;
     }
 
     // 兼容 custom 服务端：如果 duration 为空，尝试从 memo.totalDuration 获取
@@ -107,10 +125,6 @@ class Work extends Equatable {
       if (processingJson['memo'] != null && processingJson['memo'] is Map) {
         final memo = processingJson['memo'] as Map;
         if (memo['totalDuration'] != null && memo['totalDuration'] is num) {
-          if (!isModified) {
-            processingJson = Map<String, dynamic>.from(json);
-            isModified = true;
-          }
           processingJson['duration'] = (memo['totalDuration'] as num).toInt();
         }
       }
@@ -124,10 +138,6 @@ class Work extends Equatable {
       if (lyricStatus != null &&
           lyricStatus is String &&
           lyricStatus.isNotEmpty) {
-        if (!isModified) {
-          processingJson = Map<String, dynamic>.from(json);
-          isModified = true;
-        }
         processingJson['has_subtitle'] = true;
       }
     }
@@ -138,6 +148,9 @@ class Work extends Equatable {
   Map<String, dynamic> toJson() => _$WorkToJson(this);
 
   String getCoverImageUrl(String baseUrl, {String? token}) {
+    if (id < 0 || ServerUtils.isSessionCredential(token)) {
+      return '${ServerUtils.normalizeHost(baseUrl)}/api/cover/${KikoenaiWorkId.serverId(id)}';
+    }
     String normalizedUrl = baseUrl;
     if (baseUrl.isNotEmpty &&
         !baseUrl.startsWith('http://') &&
@@ -165,7 +178,7 @@ class Work extends Equatable {
   Work copyWith({
     int? id,
     String? title,
-    int? circleId,
+    Object? circleId,
     String? name,
     List<Va>? vas,
     List<Tag>? tags,
@@ -286,6 +299,7 @@ class RatingDetail extends Equatable {
   final int reviewPoint;
 
   final int count;
+  @JsonKey(defaultValue: 0)
   final int ratio;
 
   const RatingDetail({
@@ -305,7 +319,7 @@ class RatingDetail extends Equatable {
 
 @JsonSerializable()
 class Circle extends Equatable {
-  final int id;
+  final Object id;
 
   @JsonKey(name: 'name')
   final String title;
@@ -337,7 +351,7 @@ class Va extends Equatable {
 
 @JsonSerializable()
 class Tag extends Equatable {
-  final int id;
+  final Object id;
   final String name;
   final int? upvote; // 支持投票数量
   final int? downvote; // 反对投票数量

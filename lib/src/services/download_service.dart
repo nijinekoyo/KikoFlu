@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 
 import '../models/download_task.dart';
 import '../utils/file_icon_utils.dart';
+import '../utils/server_utils.dart';
+import '../utils/kikoenai_work_id.dart';
 import 'cache_service.dart';
 import 'storage_service.dart';
 import 'kikoeru_api_service.dart';
@@ -199,8 +201,11 @@ class DownloadService {
       }
 
       // 下载图片
-      _dio.options.headers.addAll(StorageService.serverCookieHeaders);
-      await _dio.download(coverUrl, coverFile.path);
+      await _dio.download(
+        coverUrl,
+        coverFile.path,
+        options: Options(headers: StorageService.headersForUrl(coverUrl)),
+      );
       return coverFile.path;
     } catch (e) {
       _log.error('下载封面图片失败: $e', tag: 'Download');
@@ -217,7 +222,7 @@ class DownloadService {
     try {
       final workDir = Directory(await _getWorkDownloadDirectory(workId));
       final metadataToSave = Map<String, dynamic>.from(metadata);
-      if (_metadataIdAsPositiveInt(metadataToSave['id']) == null) {
+      if (_metadataWorkId(metadataToSave['id']) == null) {
         metadataToSave['id'] = workId;
       }
       metadataToSave[LocalWorkMetadataService.localWorkDirNameKey] = p.basename(
@@ -286,7 +291,7 @@ class DownloadService {
       if (await metadataFile.exists()) {
         final content = await metadataFile.readAsString();
         final metadata = jsonDecode(content) as Map<String, dynamic>;
-        if (_metadataIdAsPositiveInt(metadata['id']) == null) {
+        if (_metadataWorkId(metadata['id']) == null) {
           metadata['id'] = workId;
         }
         metadata[LocalWorkMetadataService.localWorkDirNameKey] = p.basename(
@@ -356,10 +361,13 @@ class DownloadService {
     return fallback;
   }
 
-  int? _metadataIdAsPositiveInt(dynamic value) {
-    final parsed = value is int ? value : int.tryParse(value?.toString() ?? '');
-    if (parsed == null || parsed <= 0) return null;
-    return parsed;
+  int? _metadataWorkId(dynamic value) {
+    try {
+      final parsed = KikoenaiWorkId.fromJson(value);
+      return parsed == 0 ? null : parsed;
+    } on FormatException {
+      return null;
+    }
   }
 
   // 获取作品元数据（公共方法，优先从内存读取，否则从硬盘读取）
@@ -767,8 +775,6 @@ class DownloadService {
       const updateInterval = 500; // 500ms 更新一次
       int? firstReportedTotal; // 记录首次收到的total，用于诊断进度跳变
 
-      _dio.options.headers.addAll(StorageService.serverCookieHeaders);
-
       _log.info(
         '开始网络下载: ${task.fileName}, url=${task.downloadUrl}',
         tag: 'Download',
@@ -778,6 +784,9 @@ class DownloadService {
       await _dio.download(
         task.downloadUrl,
         tempFilePath,
+        options: Options(
+          headers: StorageService.headersForUrl(task.downloadUrl),
+        ),
         cancelToken: cancelToken,
         onReceiveProgress: (received, total) {
           if (total != -1) {
@@ -1226,9 +1235,7 @@ class DownloadService {
             normalizedHost = 'https://$host';
           }
 
-          final coverUrl = token.isNotEmpty
-              ? '$normalizedHost/api/cover/$workId?token=$token'
-              : '$normalizedHost/api/cover/$workId';
+          final coverUrl = ServerUtils.coverUrl(normalizedHost, workId, token);
 
           await _downloadCoverImage(
             workId,
@@ -1419,7 +1426,7 @@ class DownloadService {
       );
       metadataCreated = true;
     } else {
-      if (_metadataIdAsPositiveInt(metadata['id']) == null) {
+      if (_metadataWorkId(metadata['id']) == null) {
         metadata['id'] = workId;
         metadataChanged = true;
       }

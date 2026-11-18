@@ -12,7 +12,7 @@ class TagLocalizer {
   /// [tagId] - the tag's numeric ID
   /// [defaultName] - the original name to fall back to
   /// [locale] - the current app locale
-  static String localize(int tagId, String defaultName, Locale locale) {
+  static String localize(Object tagId, String defaultName, Locale locale) {
     final translations = tagTranslations[tagId];
     if (translations == null) return defaultName;
 

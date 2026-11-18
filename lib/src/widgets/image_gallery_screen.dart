@@ -125,7 +125,7 @@ class _ImageGalleryScreenState extends State<ImageGalleryScreen> {
           imageUrl,
           options: Options(
             responseType: ResponseType.bytes,
-            headers: StorageService.serverCookieHeaders,
+            headers: StorageService.headersForUrl(imageUrl),
           ),
         );
         imageBytes = response.data as List<int>;

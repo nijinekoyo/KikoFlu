@@ -247,19 +247,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _log.captureOutput('[Auth] Login successful, received token');
 
       // Normalize host URL to include protocol
-      String normalizedHost;
-      if (host.startsWith('http://') || host.startsWith('https://')) {
-        normalizedHost = host;
-      } else {
-        // For remote hosts, use HTTPS; for localhost, use HTTP
-        if (host.contains('localhost') ||
-            host.startsWith('127.0.0.1') ||
-            host.startsWith('192.168.')) {
-          normalizedHost = 'http://$host';
-        } else {
-          normalizedHost = 'https://$host';
-        }
-      }
+      final normalizedHost = ServerUtils.normalizeHost(host);
 
       _log.captureOutput('[Auth] Normalized host: $normalizedHost');
 
@@ -389,19 +377,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       // Normalize host URL to include protocol
-      String normalizedHost;
-      if (host.startsWith('http://') || host.startsWith('https://')) {
-        normalizedHost = host;
-      } else {
-        // For remote hosts, use HTTPS; for localhost, use HTTP
-        if (host.contains('localhost') ||
-            host.startsWith('127.0.0.1') ||
-            host.startsWith('192.168.')) {
-          normalizedHost = 'http://$host';
-        } else {
-          normalizedHost = 'https://$host';
-        }
-      }
+      final normalizedHost = ServerUtils.normalizeHost(host);
 
       // Update API service with token and normalized host
       _apiService.init(token, normalizedHost);
@@ -520,19 +496,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> updateHost(String host) async {
     if (state.token != null) {
       // Normalize host URL to include protocol
-      String normalizedHost;
-      if (host.startsWith('http://') || host.startsWith('https://')) {
-        normalizedHost = host;
-      } else {
-        // For remote hosts, use HTTPS; for localhost, use HTTP
-        if (host.contains('localhost') ||
-            host.startsWith('127.0.0.1') ||
-            host.startsWith('192.168.')) {
-          normalizedHost = 'http://$host';
-        } else {
-          normalizedHost = 'https://$host';
-        }
-      }
+      final normalizedHost = ServerUtils.normalizeHost(host);
 
       // 更新host时同步serverCookie配置
       final cookie = state.currentUser?.serverCookie;
@@ -549,6 +513,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    try {
+      await _apiService.logout();
+    } catch (e) {
+      _log.captureOutput('Failed to revoke server session: $e');
+    }
     try {
       await StorageService.remove('auth_token');
       await StorageService.remove('server_host');

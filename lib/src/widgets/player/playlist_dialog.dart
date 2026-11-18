@@ -10,6 +10,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/l10n_extensions.dart';
 import '../../utils/local_file_url.dart';
+import '../../utils/server_utils.dart';
+import '../../services/storage_service.dart';
 import '../privacy_blur_cover.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -109,9 +111,11 @@ class PlaylistDialog extends ConsumerWidget {
                                 !normalizedHost.startsWith('https://')) {
                               normalizedHost = 'https://$normalizedHost';
                             }
-                            workCoverUrl = token.isNotEmpty
-                                ? '$normalizedHost/api/cover/${track.workId}?token=$token'
-                                : '$normalizedHost/api/cover/${track.workId}';
+                            workCoverUrl = ServerUtils.coverUrl(
+                              normalizedHost,
+                              track.workId!,
+                              token,
+                            );
                           }
                         }
 
@@ -220,6 +224,11 @@ class PlaylistDialog extends ConsumerWidget {
                                                       )
                                                     : CachedNetworkImage(
                                                         imageUrl: resolvedCover,
+                                                        httpHeaders:
+                                                            StorageService
+                                                                .headersForUrl(
+                                                          resolvedCover,
+                                                        ),
                                                         fit: BoxFit.cover,
                                                         errorWidget: (context,
                                                             url, error) {

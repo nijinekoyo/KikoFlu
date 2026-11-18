@@ -10,6 +10,7 @@ import '../models/work.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/scrollable_appbar.dart';
 import '../services/work_track_file_builder.dart';
+import '../services/storage_service.dart';
 import '../utils/system_ui_style.dart';
 import '../widgets/file_explorer_widget.dart';
 import '../widgets/file_selection_dialog.dart';
@@ -103,7 +104,10 @@ class _WorkDetailScreenState extends ConsumerState<WorkDetailScreen> {
     if (host.isEmpty) return;
 
     final imageUrl = widget.work.getCoverImageUrl(host, token: token);
-    final imageProvider = NetworkImage(imageUrl);
+    final imageProvider = NetworkImage(
+      imageUrl,
+      headers: StorageService.headersForUrl(imageUrl),
+    );
 
     try {
       // 预加载图片到内存
@@ -650,6 +654,7 @@ class _WorkDetailScreenState extends ConsumerState<WorkDetailScreen> {
           layers: [
             CachedNetworkImage(
               imageUrl: coverUrl,
+              httpHeaders: StorageService.headersForUrl(coverUrl),
               cacheKey: 'work_cover_${widget.work.id}',
               fit: BoxFit.contain,
               placeholder: (context, url) => _buildCoverPlaceholder(),

@@ -1,4 +1,5 @@
 import '../models/work.dart';
+import '../utils/server_utils.dart';
 
 class WorkTrackFileBuilder {
   const WorkTrackFileBuilder({
@@ -61,7 +62,10 @@ class WorkTrackFileBuilder {
       return null;
     }
 
-    return '$normalizedHost/api/media/stream/$hash?token=$token';
+    return ServerUtils.withAuthToken(
+      '$normalizedHost/api/media/stream/$hash',
+      token,
+    );
   }
 
   String get _normalizedHost {

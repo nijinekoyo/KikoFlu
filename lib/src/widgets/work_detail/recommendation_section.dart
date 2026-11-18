@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../models/work.dart';
+import '../../services/storage_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/recommendation_provider.dart';
 import '../../providers/work_detail_display_provider.dart';
@@ -257,6 +258,7 @@ class _RecommendationCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(8),
         child: CachedNetworkImage(
           imageUrl: url,
+          httpHeaders: StorageService.headersForUrl(url),
           cacheKey: 'work_cover_${work.id}',
           memCacheWidth:
               (120 * MediaQuery.of(context).devicePixelRatio).round(),

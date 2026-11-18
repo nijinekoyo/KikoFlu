@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'log_service.dart';
+import '../utils/server_utils.dart';
 
 class StorageService {
   static late Box _settingsBox;
@@ -130,5 +131,26 @@ class StorageService {
       return {'Cookie': cookie};
     }
     return {};
+  }
+
+  /// Keep session secrets scoped to the configured server and deployment path.
+  static Map<String, String> headersForUrl(String url) {
+    final headers = serverCookieHeaders;
+    final token = getString('auth_token');
+    final host = getString('server_host');
+    if (!ServerUtils.isSessionCredential(token) || host == null) return headers;
+    final target = Uri.tryParse(url);
+    final server = Uri.tryParse(ServerUtils.normalizeHost(host));
+    if (target != null &&
+        server != null &&
+        target.scheme == server.scheme &&
+        target.host == server.host &&
+        target.port == server.port &&
+        (server.path.isEmpty ||
+            target.path == server.path ||
+            target.path.startsWith('${server.path}/'))) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
   }
 }

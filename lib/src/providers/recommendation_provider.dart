@@ -113,7 +113,7 @@ class RecommendationNotifier extends StateNotifier<RecommendationState> {
   }
 
   /// 计算相关度评分
-  double _relevanceScore(Work candidate, Set<int> currentTagIds) {
+  double _relevanceScore(Work candidate, Set<Object> currentTagIds) {
     final candidateTagIds = candidate.tags?.map((t) => t.id).toSet() ?? {};
     final commonTags = currentTagIds.intersection(candidateTagIds).length;
     final rating = candidate.rateAverage ?? 0;
@@ -123,7 +123,7 @@ class RecommendationNotifier extends StateNotifier<RecommendationState> {
   /// 获取标签最相关的作品（仅请求20条，按评分排序）
   Future<List<Work>> _fetchWorksByTag(
     KikoeruApiService api,
-    int tagId,
+    Object tagId,
   ) async {
     try {
       final data = await api.getWorksByTag(

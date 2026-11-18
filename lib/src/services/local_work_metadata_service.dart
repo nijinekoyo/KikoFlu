@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../utils/file_icon_utils.dart';
 import '../utils/string_utils.dart';
+import '../utils/kikoenai_work_id.dart';
 import 'download_file_path_service.dart';
 
 class LocalWorkFolder {
@@ -79,6 +80,19 @@ class LocalWorkMetadataService {
   }
 
   static int? parseWorkIdFromName(String name) {
+    final internalId = int.tryParse(name.trim());
+    if (internalId != null &&
+        internalId < 0 &&
+        const [1, 2].contains(-internalId % 10)) {
+      return internalId;
+    }
+    final otherSource = RegExp(
+      r'(?:^|[\s\[【(（])(BJ\d{5,8}|d_?\d+)(?=$|[\s\]】)）])',
+      caseSensitive: false,
+    ).firstMatch(name);
+    if (otherSource != null) {
+      return KikoenaiWorkId.fromJson(otherSource.group(1));
+    }
     final rjMatch = _rjPattern.firstMatch(name);
     if (rjMatch != null) {
       return int.tryParse(rjMatch.group(1)!);
